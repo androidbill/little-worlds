@@ -41,6 +41,8 @@ Open http://127.0.0.1:43871. Visit once online to download the game and artwork;
 
 Tap or click an uncovered tile to pick it. The flat board fits the available screen and shows covered tiles in a darker shade. Keyboard users can Tab through available tiles and press Enter/Space to pick; Ctrl/Cmd+Z undoes. Sound uses original synthesized tones and can be muted. Reduced motion is respected and can be changed in Help.
 
+Picks register on pointer contact. The board, tray, matches, and score update synchronously; decorative flights never block the next pick or undo. Progress writes are batched after a short pause in tapping and flushed when the page is hidden or left. Actual layers have a small diagonal offset and contrasting rims/shadows. A purple stack badge counts directly aligned remaining tiles, including the visible top tile; it updates as tiles are removed or restored.
+
 ## Original cartoon art
 
 ChatGPT Images created a new set of eight cartoon icons with transparent backgrounds, a sunny orchard environment, and a matching app identity specifically for this version. Full-resolution originals are `assets/originals/cartoon-*.png`; optimized runtime images are in `public/art/cartoon/`. `npm run assets` rebuilds the tile portraits, WebP scenery, and correctly sized install icons while preserving transparency. The exact prompts are recorded in `assets/CARTOON-PROMPTS.md`.

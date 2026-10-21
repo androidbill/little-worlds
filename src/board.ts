@@ -10,10 +10,9 @@ export class Board {
   private tiles = new Map<number, HTMLButtonElement>();
   private state: State | null = null;
   private key = "";
-  private busy = false;
   private observer: ResizeObserver;
   private hintTimer = 0;
-  private animations = new Set<Animation>();
+  private effects = new Map<Animation, HTMLElement>();
 
   constructor(
     host: HTMLElement,
@@ -31,10 +30,10 @@ export class Board {
 
   sync(state: State) {
     this.state = state;
-    for (const animation of this.animations) animation.cancel();
-    this.animations.clear();
     const key = `${state.level}:${state.seed}`;
-    if (key !== this.key) {
+    const layoutChanged = key !== this.key;
+    if (layoutChanged) {
+      this.clearEffects();
       this.key = key;
       this.host.replaceChildren();
       this.tiles.clear();
@@ -44,21 +43,36 @@ export class Board {
     for (const tile of state.tiles) {
       const button = this.tiles.get(tile.id)!;
       const image = button.querySelector("img")!;
-      const source = assetUrl(`art/cartoon/tiles/${TILE_FILES[tile.kind]}.webp`);
+      const source = assetUrl(
+        `art/cartoon/tiles/${TILE_FILES[tile.kind]}.webp`,
+      );
       if (image.getAttribute("src") !== source) image.src = source;
+      const available = isAvailable(tile, state.tiles);
+      const stackSize =
+        1 +
+        state.tiles.filter(
+          (under) =>
+            !under.removed &&
+            under.layer < tile.layer &&
+            Math.abs(under.x - tile.x) < 0.15 &&
+            Math.abs(under.z - tile.z) < 0.15,
+        ).length;
+      const badge = button.querySelector<HTMLElement>(".tile-stack-count")!;
+      badge.hidden = stackSize < 2 || !available;
+      badge.textContent = String(stackSize);
+      button.dataset.stackSize = String(stackSize);
       button.setAttribute(
         "aria-label",
-        `Pick ${TILE_NAMES[tile.kind]}, layer ${tile.layer + 1}, tile ${tile.id + 1}`,
+        `Pick ${TILE_NAMES[tile.kind]}, layer ${tile.layer + 1}, tile ${tile.id + 1}${stackSize > 1 ? `, stack of ${stackSize} tiles` : ""}`,
       );
       button.hidden = tile.removed;
-      button.style.visibility = "";
       button.style.zIndex = String(tile.layer * 1000 + tile.id);
-      button.classList.toggle("covered", !isAvailable(tile, state.tiles));
+      button.classList.toggle("covered", !available);
+      button.disabled = !available || state.status !== "playing";
       button.classList.remove("hinted");
       delete button.dataset.hint;
     }
-    this.setBusy(this.busy);
-    this.resize();
+    if (layoutChanged) this.resize();
   }
 
   private createTile(tile: Tile) {
@@ -69,12 +83,27 @@ export class Board {
     const image = document.createElement("img");
     image.alt = "";
     image.draggable = false;
-    button.append(image);
-    button.addEventListener("click", () => {
-      if (this.busy || !this.state) return;
+    const badge = document.createElement("span");
+    badge.className = "tile-stack-count";
+    badge.setAttribute("aria-hidden", "true");
+    badge.hidden = true;
+    button.append(image, badge);
+    const activate = () => {
+      if (!this.state || this.state.status !== "playing") return;
       const current = this.state.tiles[tile.id];
+      if (current.removed) return;
       if (!isAvailable(current, this.state.tiles)) this.onBlocked();
       else this.onPick(tile.id);
+    };
+    // Pointer input commits on contact. Its later click must not pick a second tile.
+    button.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      activate();
+    });
+    button.addEventListener("click", (event) => {
+      // Keyboard and assistive-technology activation has no pointer click count.
+      if (event.detail === 0) activate();
     });
     this.tiles.set(tile.id, button);
     this.host.append(button);
@@ -85,8 +114,12 @@ export class Board {
     const width = this.host.clientWidth,
       height = this.host.clientHeight;
     if (!width || !height) return;
-    const xs = this.state.tiles.map((t) => t.x),
-      ys = this.state.tiles.map((t) => t.z);
+    // A small diagonal offset exposes the actual lower tiles, even in aligned stacks.
+    // Keep the total offset inside the gap between neighboring tile columns/rows.
+    const lift =
+      0.075 / Math.max(1, ...this.state.tiles.map((tile) => tile.layer));
+    const xs = this.state.tiles.map((t) => t.x - t.layer * lift),
+      ys = this.state.tiles.map((t) => t.z - t.layer * lift);
     const minX = Math.min(...xs),
       maxX = Math.max(...xs),
       minY = Math.min(...ys),
@@ -103,21 +136,9 @@ export class Board {
       const button = this.tiles.get(tile.id)!;
       button.style.width = `${unit}px`;
       button.style.height = `${unit * 1.1}px`;
-      button.style.left = `${left + (tile.x - minX) * unit}px`;
-      button.style.top = `${top + (tile.z - minY) * unit}px`;
+      button.style.left = `${left + (tile.x - tile.layer * lift - minX) * unit}px`;
+      button.style.top = `${top + (tile.z - tile.layer * lift - minY) * unit}px`;
       button.style.setProperty("--tile-size", `${unit}px`);
-    }
-  }
-
-  setBusy(busy: boolean) {
-    this.busy = busy;
-    this.host.setAttribute("aria-busy", String(busy));
-    if (!this.state) return;
-    for (const tile of this.state.tiles) {
-      this.tiles.get(tile.id)!.disabled =
-        busy ||
-        !isAvailable(tile, this.state.tiles) ||
-        this.state.status !== "playing";
     }
   }
 
@@ -136,47 +157,91 @@ export class Board {
     }, 4500);
   }
 
-  async fly(id: number, reduced = false) {
+  fly(id: number, trayIndex: number, reduced = false) {
     const button = this.tiles.get(id);
-    if (!button) return;
+    if (!button || reduced) return;
     const source = button.getBoundingClientRect();
-    const index = this.state?.tray.indexOf(id) ?? -1;
     const slots = [...document.querySelectorAll<HTMLElement>(".tray-slot")];
-    const target =
-      slots[
-        index >= 0 ? index : Math.min(this.state?.tray.length ?? 0, 6)
-      ]?.getBoundingClientRect();
+    const target = slots[Math.min(trayIndex, 6)]?.getBoundingClientRect();
     const dx = target
       ? target.x + target.width / 2 - source.x - source.width / 2
       : 0;
     const dy = target
       ? target.y + target.height / 2 - source.y - source.height / 2
       : 45;
-    button.style.zIndex = "10000";
-    const animation = button.animate(
-      reduced
-        ? [{ opacity: 1 }, { opacity: 0 }]
-        : [
-            { transform: "translate(0,0) scale(1)", opacity: 1 },
-            {
-              transform: `translate(${dx * 0.28}px,${dy * 0.25 - 24}px) scale(1.08)`,
-              opacity: 1,
-              offset: 0.35,
-            },
-            {
-              transform: `translate(${dx}px,${dy}px) scale(.65)`,
-              opacity: 0.25,
-            },
-          ],
+    const flight = document.createElement("div");
+    flight.className = "tile-button tile-flight";
+    flight.setAttribute("aria-hidden", "true");
+    flight.style.cssText = `left:${source.x}px;top:${source.y}px;width:${source.width}px;height:${source.height}px;--tile-size:${source.width}px`;
+    flight.append(button.querySelector("img")!.cloneNode(true));
+    document.body.append(flight);
+    const animation = flight.animate(
+      [
+        { transform: "translate(0,0) scale(1)", opacity: 1 },
+        {
+          transform: `translate(${dx * 0.28}px,${dy * 0.25 - 24}px) scale(1.08)`,
+          opacity: 1,
+          offset: 0.35,
+        },
+        {
+          transform: `translate(${dx}px,${dy}px) scale(.65)`,
+          opacity: 0.25,
+        },
+      ],
       {
-        duration: reduced ? 60 : 260,
+        duration: 210,
         easing: "cubic-bezier(.25,.7,.35,1)",
         fill: "forwards",
       },
     );
-    this.animations.add(animation);
-    await animation.finished.catch(() => {});
-    button.style.visibility = "hidden";
+    this.trackEffect(animation, flight);
+  }
+
+  match(kind: number, reduced = false) {
+    if (reduced) return;
+    const tray = document.querySelector("#tray")!.getBoundingClientRect();
+    const burst = document.createElement("div");
+    burst.className = "match-burst";
+    burst.setAttribute("aria-hidden", "true");
+    burst.style.left = `${tray.x + (tray.width - 166) / 2}px`;
+    burst.style.top = `${tray.y - 38}px`;
+    for (let i = 0; i < 3; i++) {
+      const image = document.createElement("img");
+      image.src = assetUrl(`art/cartoon/tiles/${TILE_FILES[kind]}.webp`);
+      image.alt = "";
+      burst.append(image);
+    }
+    const label = document.createElement("strong");
+    label.textContent = "Match!";
+    burst.append(label);
+    document.body.append(burst);
+    const animation = burst.animate(
+      [
+        { transform: "translateY(8px) scale(.8)", opacity: 0 },
+        { transform: "translateY(-3px) scale(1.06)", opacity: 1, offset: 0.25 },
+        { transform: "translateY(-18px) scale(1)", opacity: 0 },
+      ],
+      { duration: 480, easing: "ease-out" },
+    );
+    this.trackEffect(animation, burst);
+  }
+
+  private trackEffect(animation: Animation, element: HTMLElement) {
+    this.effects.set(animation, element);
+    void animation.finished
+      .catch(() => {})
+      .then(() => {
+        element.remove();
+        this.effects.delete(animation);
+      });
+  }
+
+  clearEffects() {
+    for (const [animation, element] of this.effects) {
+      animation.cancel();
+      element.remove();
+    }
+    this.effects.clear();
   }
 
   celebrate() {
@@ -203,14 +268,14 @@ export class Board {
           easing: "ease-in",
         },
       );
-      void animation.finished.then(() => confetti.remove());
+      this.trackEffect(animation, confetti);
     }
   }
 
   dispose() {
     this.observer.disconnect();
     clearTimeout(this.hintTimer);
-    for (const animation of this.animations) animation.cancel();
+    this.clearEffects();
     this.host.replaceChildren();
   }
 }

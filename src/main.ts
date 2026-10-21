@@ -90,8 +90,8 @@ let unlocked = Math.max(1, Math.min(12, saved?.unlocked || 1)),
   motion =
     saved?.motion ?? !matchMedia("(prefers-reduced-motion: reduce)").matches;
 let board: Board,
-  busy = false,
-  generation = 0,
+  saveTimer = 0,
+  savePending = false,
   toastTimer = 0,
   audio: AudioContext | undefined,
   installPrompt: any,
@@ -110,6 +110,7 @@ function notify(message: string) {
   );
 }
 function persist() {
+  clearTimeout(saveTimer);
   try {
     localStorage.setItem(
       STORAGE,
@@ -123,6 +124,7 @@ function persist() {
         motion,
       } satisfies Saved),
     );
+    savePending = false;
     $("#save-state").innerHTML =
       icon("check") +
       (navigator.onLine
@@ -132,6 +134,12 @@ function persist() {
     $("#save-state").textContent = "Device storage unavailable";
     notify("Your browser is preventing progress from being saved.");
   }
+}
+function scheduleSave() {
+  savePending = true;
+  clearTimeout(saveTimer);
+  // Serialize the undo history once tapping pauses, outside the input handler.
+  saveTimer = window.setTimeout(persist, 180);
 }
 function tone(kind: "pick" | "match" | "win" | "tap", tile = 0) {
   if (!sound) return;
@@ -186,11 +194,12 @@ function recordWin() {
 function stars(n: number) {
   return `<div class="stars">${[0, 1, 2].map((i) => icon("star", i < n ? "earned" : "")).join("")}</div>`;
 }
-function renderTray(ids = game.state.tray, matching: number[] = []) {
+function renderTray() {
+  const ids = game.state.tray;
   $("#tray").innerHTML = Array.from({ length: 7 }, (_, i) => {
     const id = ids[i],
       t = id === undefined ? null : game.state.tiles[id];
-    return `<div class="tray-slot ${t ? "filled" : ""} ${id !== undefined && matching.includes(id) ? "matched" : ""}" ${t ? `style="--jewel:${TILE_COLORS[t.kind]}"` : ""}>${t ? portrait(t.kind) : "<span></span>"}</div>`;
+    return `<div class="tray-slot ${t ? "filled" : ""}" ${t ? `style="--jewel:${TILE_COLORS[t.kind]}"` : ""}>${t ? portrait(t.kind) : "<span></span>"}</div>`;
   }).join("");
   $("#tray-count").textContent = String(ids.length);
   $("#tray").classList.toggle("danger", ids.length >= 5);
@@ -225,10 +234,9 @@ function render() {
   $("#palette").innerHTML = [...new Set(s.tiles.map((t) => t.kind))]
     .map((kind) => portrait(kind))
     .join("");
-  $("#undo").toggleAttribute("disabled", !game.history.length || busy);
-  $("#hint").toggleAttribute("disabled", s.status !== "playing" || busy);
-  $("#remix").toggleAttribute("disabled", s.status === "won" || busy);
-  $("#restart").toggleAttribute("disabled", busy);
+  $("#undo").toggleAttribute("disabled", !game.history.length);
+  $("#hint").toggleAttribute("disabled", s.status !== "playing");
+  $("#remix").toggleAttribute("disabled", s.status === "won");
   $("#sound").innerHTML = icon(sound ? "sound" : "mute");
   $("#sound").setAttribute(
     "aria-label",
@@ -236,7 +244,7 @@ function render() {
   );
   document.body.classList.toggle("reduced-motion", !motion);
   renderTray();
-  persist();
+  scheduleSave();
 }
 function closeModal() {
   $("#modal").classList.add("hidden");
@@ -270,7 +278,6 @@ function resultModal() {
   }
 }
 function showLevels() {
-  if (busy) return;
   modal(
     `<div class="eyebrow">SUNNY ORCHARD</div><h2 id="modal-title">Your colorful little journey.</h2><p>Twelve gardens. A new perspective in every one.</p><div class="level-grid">${LEVELS.map((l, i) => `<button class="level-option ${i + 1 === game.state.level ? "current" : ""}" data-level="${i + 1}" ${i + 1 > unlocked ? "disabled" : ""}><span class="level-option-number" style="--accent:${l.color}">${i + 1 > unlocked ? icon("lock") : String(i + 1).padStart(2, "0")}</span><span>${l.name}<small>${l.difficulty}</small></span>${best[i + 1] ? stars(best[i + 1].stars) : i + 1 === game.state.level ? '<span class="playing-label">PLAYING</span>' : ""}</button>`).join("")}</div>`,
   );
@@ -284,53 +291,35 @@ function showLevels() {
   );
 }
 function start(level: number, seed = Date.now()) {
-  if (busy) return;
-  generation++;
+  board.clearEffects();
   game = new Game(createState(level, seed));
   closeModal();
   board.sync(game.state);
   render();
 }
-async function pick(id: number) {
-  if (busy) return;
+function pick(id: number) {
   const previous = [...game.state.tray],
     event = game.pick(id);
   if (!event) return;
-  busy = true;
-  board.setBusy(true);
-  const token = generation;
-  recordWin();
-  persist();
-  tone("pick", event.kind);
-  $("#remaining").textContent = String(
-    game.state.tiles.filter((t) => !t.removed).length,
+  const last = previous.findLastIndex(
+    (other) => game.state.tiles[other].kind === event.kind,
   );
-  await board.fly(id, !motion);
-  if (token !== generation) return;
-  const kind = event.kind,
-    last = previous.findLastIndex(
-      (other) => game.state.tiles[other].kind === kind,
-    );
-  previous.splice(last >= 0 ? last + 1 : previous.length, 0, id);
-  renderTray(previous, event.matched);
-  if (event.matched.length) {
-    tone("match");
-    await new Promise((resolve) => setTimeout(resolve, motion ? 280 : 60));
-  }
-  if (token !== generation) return;
-  busy = false;
-  board.setBusy(false);
+  // Capture a visual copy before the real tile disappears. Effects never own game state.
+  board.fly(id, last >= 0 ? last + 1 : previous.length, !motion);
   board.sync(game.state);
+  recordWin();
+  render();
+  tone(event.matched.length ? "match" : "pick", event.kind);
+  if (event.matched.length) board.match(event.kind, !motion);
   if (event.status === "won") {
     board.celebrate();
     tone("win");
   }
-  render();
   if (event.status !== "playing") resultModal();
 }
 function undo() {
-  if (busy) return;
   if (game.undo()) {
+    board.clearEffects();
     closeModal();
     board.sync(game.state);
     render();
@@ -339,23 +328,22 @@ function undo() {
   } else notify("Pick a tile first. Your last move will be saved here.");
 }
 function remix() {
-  if (busy || !game.remix()) return;
+  if (!game.remix()) return;
+  board.clearEffects();
   closeModal();
   board.sync(game.state);
   render();
   tone("tap");
   notify("Fresh possibilities. Every remaining tile can be matched.");
 }
-board = new Board(
-  $("#board"),
-  (id) => void pick(id),
-  () => notify("That tile is covered. Pick a tile with nothing above it."),
+board = new Board($("#board"), pick, () =>
+  notify("That tile is covered. Pick a tile with nothing above it."),
 );
 board.sync(game.state);
 $("#undo").onclick = undo;
 $("#remix").onclick = remix;
 $("#hint").onclick = () => {
-  if (busy || game.state.status !== "playing") return;
+  if (game.state.status !== "playing") return;
   const ids = game.hint();
   board.highlight(ids);
   if (ids.length)
@@ -365,7 +353,6 @@ $("#hint").onclick = () => {
   tone("tap");
 };
 $("#restart").onclick = () => {
-  if (busy) return;
   modal(
     `<div class="modal-symbol">${icon("reset")}</div><h2 id="modal-title">A fresh perspective?</h2><p>Restart this garden with its original tile arrangement. Your completed gardens stay saved.</p><button class="primary-button" id="confirm-restart">Restart this garden ${icon("reset")}</button><button class="text-button" id="keep-playing">Keep playing</button>`,
   );
@@ -382,7 +369,7 @@ $("#sound").onclick = () => {
 };
 $("#help").onclick = () => {
   modal(
-    `<div class="modal-symbol">${icon("spark")}</div><div class="eyebrow">YOUR LITTLE ESCAPE</div><h2 id="modal-title">Three is a beautiful number.</h2><div class="help-triple">${portrait(0) + portrait(0) + portrait(0)}</div><ol class="help-steps"><li><b>Pick an uncovered tile.</b><span>A tile is free when no other tile rests above it.</span></li><li><b>Make a match of three.</b><span>Three of the same symbol clear from your tray, making room for more.</span></li><li><b>Clear the whole garden.</b><span>Plan around seven tray spaces. Every level has a winning path.</span></li></ol><p class="help-extra">Tap or click an uncovered tile to pick it. Undo, hints, and remix are always free.</p><label class="motion-setting"><input type="checkbox" id="motion-setting" ${motion ? "checked" : ""}> Enable animations</label><button class="primary-button" id="help-done">Let’s play ${icon("arrow")}</button>`,
+    `<div class="modal-symbol">${icon("spark")}</div><div class="eyebrow">YOUR LITTLE ESCAPE</div><h2 id="modal-title">Three is a beautiful number.</h2><div class="help-triple">${portrait(0) + portrait(0) + portrait(0)}</div><ol class="help-steps"><li><b>Pick an uncovered tile.</b><span>Raised edges show the layers. A small number counts the tiles in a directly aligned stack, including the top tile. Clear the top to reach the tiles underneath.</span></li><li><b>Make a match of three.</b><span>Three of the same symbol clear from your tray, making room for more.</span></li><li><b>Clear the whole garden.</b><span>Plan around seven tray spaces. Every level has a winning path.</span></li></ol><p class="help-extra">Tap or click an uncovered tile to pick it. Undo, hints, and remix are always free.</p><label class="motion-setting"><input type="checkbox" id="motion-setting" ${motion ? "checked" : ""}> Enable animations</label><button class="primary-button" id="help-done">Let’s play ${icon("arrow")}</button>`,
   );
   $("#help-done").onclick = closeModal;
   $("#motion-setting").onchange = (e) => {
@@ -435,6 +422,12 @@ $("#install").onclick = async () => {
 };
 window.addEventListener("online", persist);
 window.addEventListener("offline", persist);
+window.addEventListener("pagehide", () => {
+  if (savePending) persist();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && savePending) persist();
+});
 recordWin();
 render();
 if (game.state.status !== "playing") resultModal();

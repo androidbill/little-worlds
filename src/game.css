@@ -332,8 +332,9 @@ button:not(:disabled):active {
   border: 2px solid #fffc;
   background: #fffdf7;
   box-shadow:
-    0 3px 0 #c4bbdc,
-    0 5px 8px #57487a24;
+    0 4px 0 #b9a9d3,
+    0 5px 0 1px #82709950,
+    0 8px 10px #57487a30;
   touch-action: manipulation;
   transform-origin: center;
   transition:
@@ -341,7 +342,7 @@ button:not(:disabled):active {
     background 0.12s,
     box-shadow 0.12s,
     transform 0.12s;
-  overflow: hidden;
+  overflow: visible;
 }
 .tile-button:after {
   content: "";
@@ -361,12 +362,81 @@ button:not(:disabled):active {
   user-select: none;
 }
 .tile-button.covered {
-  background: #dddfed;
-  border-color: #e7e8f3;
+  background: #d9d4e8;
+  border-color: #f5f0ff;
   box-shadow:
-    0 3px 0 #b7b4cd,
-    0 4px 7px #57487a1c;
-  filter: brightness(0.83) saturate(0.8);
+    0 3px 0 #a291bf,
+    0 4px 0 1px #79648e55,
+    0 6px 8px #57487a2e;
+}
+.tile-button.covered img {
+  filter: brightness(0.75) saturate(0.75);
+  opacity: 0.85;
+}
+.tile-stack-count {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 25px;
+  height: clamp(17px, calc(var(--tile-size) * 0.29), 23px);
+  padding: 0 4px;
+  border: 1.5px solid white;
+  border-radius: 7px;
+  background: #8860bd;
+  color: white;
+  font-size: clamp(9px, calc(var(--tile-size) * 0.2), 13px);
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: 0 2px 3px #523b7740;
+  pointer-events: none;
+}
+.tile-stack-count:before {
+  content: "";
+  width: 7px;
+  height: 6px;
+  border: 1px solid white;
+  border-radius: 1px;
+  box-shadow:
+    -2px 2px 0 -1px #8860bd,
+    -2px 2px 0 0 white;
+}
+.tile-flight {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  transition: none;
+  will-change: transform, opacity;
+}
+.match-burst {
+  position: fixed;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 166px;
+  height: 42px;
+  border: 2px solid white;
+  border-radius: 22px;
+  background: #fff7c9;
+  color: #a36a21;
+  box-shadow: 0 4px 16px #8c6a8230;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.match-burst img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+.match-burst strong {
+  margin-left: 4px;
+  font-size: 14px;
 }
 .tile-button:disabled {
   opacity: 1;
@@ -472,17 +542,11 @@ button:not(:disabled):active {
   background: #fffefb;
   border-color: #ece4f5;
   box-shadow: 0 2px #cdb9e7;
-  animation: arrive 0.2s ease-out;
 }
 .tray-slot .jewel-portrait {
   width: 88%;
   height: 88%;
   object-fit: contain;
-}
-.tray-slot.matched {
-  animation: clear 0.28s ease-in forwards;
-  border-color: #ffd764;
-  background: #fff5ca;
 }
 .tray.danger .tray-slot:not(.filled) {
   border-color: #e8a2b5;
@@ -1124,30 +1188,6 @@ button:not(:disabled):active {
     box-shadow:
       0 3px 0 #d9b453,
       0 0 0 7px #ffdf6d66;
-  }
-}
-@keyframes arrive {
-  from {
-    transform: translateY(-10px) scale(0.85);
-    opacity: 0.3;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-@keyframes clear {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  45% {
-    transform: scale(1.1);
-    filter: brightness(1.15);
-  }
-  100% {
-    transform: scale(0.5);
-    opacity: 0;
   }
 }
 @media (min-width: 1500px) {
