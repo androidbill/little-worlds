@@ -478,35 +478,25 @@ button:not(:disabled):active {
 }
 .tile-stack-count {
   position: absolute;
-  right: -2px;
-  bottom: -1px;
+  right: 0;
+  bottom: 0;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 25px;
-  height: clamp(17px, calc(var(--tile-size) * 0.29), 23px);
-  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  width: clamp(20px, calc(var(--tile-size) * 0.34), 26px);
+  height: clamp(20px, calc(var(--tile-size) * 0.34), 26px);
+  padding: 0;
   border: 1.5px solid white;
-  border-radius: 7px;
+  border-radius: 50%;
   background: #8860bd;
   color: white;
-  font-size: clamp(9px, calc(var(--tile-size) * 0.2), 13px);
+  font-size: clamp(10px, calc(var(--tile-size) * 0.2), 13px);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   font-weight: 700;
+  transform: translate(40%, 40%);
   box-shadow: 0 2px 3px #523b7740;
   pointer-events: none;
-}
-.tile-stack-count:before {
-  content: "";
-  width: 7px;
-  height: 6px;
-  border: 1px solid white;
-  border-radius: 1px;
-  box-shadow:
-    -2px 2px 0 -1px #8860bd,
-    -2px 2px 0 0 white;
 }
 .tile-flight {
   position: fixed;
