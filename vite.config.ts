@@ -36,7 +36,7 @@ export default defineConfig({
     VitePWA({
       base,
       scope: base,
-      registerType: "autoUpdate",
+      registerType: "prompt",
       // Registration and refresh prompts are managed by src/updates.ts.
       injectRegister: false,
       includeAssets: ["app-192.png", "app-512.png", "apple-touch-icon.png"],
@@ -66,6 +66,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: false,
+        clientsClaim: false,
         globPatterns: [
           "**/*.{js,css,html,webp,woff2}",
           "app-*.png",

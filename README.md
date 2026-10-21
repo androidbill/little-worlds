@@ -16,7 +16,7 @@ The top-right hamburger contains Refresh, Share, About, Sound, How to play, and 
 
 `release.json` is the single version source. Releases use `YYYY.MM.DD.NN`, starting at `2026.10.20.03`. After finishing app edits, run `npm run release` and commit the updated metadata before the final build. The script fingerprints app inputs; changed inputs increment the revision and set the current date in **America/Edmonton**, while unchanged builds keep their version. The revision continues increasing across day changes. GitHub Actions performs this step automatically and commits missing version metadata before deployment.
 
-Startup, reconnect, and returning to the app check a small uncached `version.json`. A newer published version displays a Refresh now / Later notice. Offline play continues when the check cannot reach the network. Caches can download in the background; the page reloads only when the player chooses Refresh. Saves use the same version 3 format across app versions.
+Startup, reconnect, focus, and returning to the app immediately check a small uncached `version.json`. While the game remains visible, it also checks every 30 seconds, so a player can discover a release without leaving the game. A newer published version displays a Refresh now / Later notice and starts downloading the offline update. Hidden pages do not poll; resuming them checks immediately. Offline play continues when the check cannot reach the network. The page reloads only when the player chooses Refresh. Saves use the same version 3 format across app versions.
 
 ## Play locally
 

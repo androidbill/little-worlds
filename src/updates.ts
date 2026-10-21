@@ -2,6 +2,7 @@ import { APP_VERSION } from "./app-meta";
 import { assetUrl, baseUrl } from "./paths";
 
 const VERSION_PATTERN = /^\d{4}\.\d{2}\.\d{2}\.\d{2,}$/;
+const CHECK_INTERVAL = 30_000;
 
 function newer(candidate: string) {
   const current = APP_VERSION.split(".").map(Number);
@@ -78,11 +79,13 @@ export function setupUpdates(options: {
     if (
       !navigator.onLine ||
       checking ||
-      (!force && Date.now() - lastCheck < 60000)
+      (!force && Date.now() - lastCheck < CHECK_INTERVAL)
     )
       return;
     checking = true;
     lastCheck = Date.now();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     // This JSON is deliberately excluded from the offline cache. The query also
     // avoids a stale CDN response when a new Pages deployment has just finished.
     try {
@@ -90,7 +93,7 @@ export function setupUpdates(options: {
         assetUrl(`version.json?check=${Date.now()}`),
         {
           cache: "no-store",
-          signal: AbortSignal.timeout(8000),
+          signal: controller.signal,
         },
       );
       if (!response.ok) return;
@@ -101,12 +104,17 @@ export function setupUpdates(options: {
         VERSION_PATTERN.test(version) &&
         newer(version)
       ) {
-        latestVersion = version;
+        if (latestVersion !== version) {
+          latestVersion = version;
+          // Download while the player decides; the page still waits for Refresh.
+          void registration.then((value) => value?.update().catch(() => {}));
+        }
         options.onAvailable(version);
       }
     } catch {
       // An offline or interrupted check never blocks play or changes the save.
     } finally {
+      clearTimeout(timeout);
       checking = false;
     }
   }
@@ -137,9 +145,18 @@ export function setupUpdates(options: {
 
   void registration.then((value) => value?.update().catch(() => {}));
   void check(true);
-  window.addEventListener("online", () => void check(true));
+  const checkOnReturn = () => {
+    if (document.visibilityState === "visible") void check(true);
+  };
+  window.addEventListener("online", checkOnReturn);
+  window.addEventListener("focus", checkOnReturn);
+  window.addEventListener("pageshow", checkOnReturn);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void check();
+    checkOnReturn();
   });
+  // A player who keeps the game open must see releases without navigating away.
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") void check();
+  }, CHECK_INTERVAL);
   return { refresh };
 }
