@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -33,6 +33,17 @@ jobs:
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
       - name: Install dependencies
         run: npm ci
+      - name: Version app changes
+        run: npm run release
+      - name: Record release version
+        run: |
+          if ! git diff --quiet -- release.json; then
+            git config user.name 'github-actions[bot]'
+            git config user.email 'github-actions[bot]@users.noreply.github.com'
+            git add release.json
+            git commit -m 'Record app release version [skip ci]'
+            git push origin HEAD:main
+          fi
       - name: Build game
         run: npm run build
         env:

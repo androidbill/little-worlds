@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import release from "./release.json" with { type: "json" };
 
 const base = process.env.BASE_PATH || "/";
 
@@ -7,10 +8,37 @@ export default defineConfig({
   base,
   build: { chunkSizeWarningLimit: 700 },
   plugins: [
+    {
+      name: "app-version",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "version.json",
+          source: JSON.stringify({ version: release.version }),
+        });
+      },
+      configureServer(server) {
+        server.middlewares.use((request, response, next) => {
+          const pathname = (request.url || "").split("?")[0];
+          if (
+            pathname !== `${base}version.json` &&
+            pathname !== "/version.json"
+          )
+            return next();
+          response.writeHead(200, {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          });
+          response.end(JSON.stringify({ version: release.version }));
+        });
+      },
+    },
     VitePWA({
       base,
       scope: base,
       registerType: "autoUpdate",
+      // Registration and refresh prompts are managed by src/updates.ts.
+      injectRegister: false,
       includeAssets: ["app-192.png", "app-512.png", "apple-touch-icon.png"],
       manifest: {
         name: "Little Worlds — Happy Tile Gardens",
@@ -45,6 +73,12 @@ export default defineConfig({
         ],
         navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith("/version.json"),
+            handler: "NetworkOnly",
+          },
+        ],
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
       },
     }),

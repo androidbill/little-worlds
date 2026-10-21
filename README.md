@@ -10,6 +10,14 @@ The game is hosted as a static website on GitHub Pages. It does not use Firebase
 
 The included GitHub Actions workflow publishes changes pushed to `main`. Pages must use **GitHub Actions** as its build source. The workflow sets `BASE_PATH` from the Pages configuration so artwork, icons, navigation, and the offline service worker use the correct repository directory. No deployment secrets are required. Local builds default to `/`; when building manually for a subdirectory, set `BASE_PATH` to that directory including its leading and trailing slashes (for example `/little-worlds/`).
 
+## App menu, versions, and updates
+
+The top-right hamburger contains Refresh, Share, About, Sound, How to play, and Install. The version is always visible beside it. About shows the app icon, name, version, and **Created by: Bill Parsons**. Share opens the device share sheet where supported; other browsers offer the public game link to copy. Refresh saves pending progress before reloading and waits for an available offline update to finish downloading.
+
+`release.json` is the single version source. Releases use `YYYY.MM.DD.NN`, starting at `2026.10.20.03`. After finishing app edits, run `npm run release` and commit the updated metadata before the final build. The script fingerprints app inputs; changed inputs increment the revision and set the current date in **America/Edmonton**, while unchanged builds keep their version. The revision continues increasing across day changes. GitHub Actions performs this step automatically and commits missing version metadata before deployment.
+
+Startup, reconnect, and returning to the app check a small uncached `version.json`. A newer published version displays a Refresh now / Later notice. Offline play continues when the check cannot reach the network. Caches can download in the background; the page reloads only when the player chooses Refresh. Saves use the same version 3 format across app versions.
+
 ## Play locally
 
 Use Node.js 24 or later:

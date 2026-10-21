@@ -6,6 +6,9 @@ import "./game.css";
 import { shell } from "./shell";
 import { Board } from "./board";
 import { assetUrl } from "./paths";
+import { APP_NAME, APP_VERSION, SHARE_URL } from "./app-meta";
+import { setupMenu } from "./menu";
+import { setupUpdates } from "./updates";
 import {
   Game,
   createState,
@@ -36,6 +39,10 @@ const paths: Record<string, string> = {
   lock: "M6 10h12v11H6z M8 10V6a4 4 0 0 1 8 0v4",
   download: "M12 3v12m-5-5 5 5 5-5 M4 16v5h16v-5",
   star: "m12 2 3 6.1 6.7 1-4.9 4.8 1.2 6.7-6-3.2-6 3.2 1.2-6.7-4.9-4.8 6.7-1Z",
+  menu: "M4 6h16 M4 12h16 M4 18h16",
+  about: "M12 11v6m0-10h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+  share:
+    "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M8.6 10.5l6.8-4 M8.6 13.5l6.8 4",
 };
 const icon = (name: string, cls = "") =>
   `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.spark}"/></svg>`;
@@ -100,6 +107,10 @@ let board: Board,
 document.querySelector("#app")!.innerHTML = shell(icon);
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
+const appMenu = setupMenu();
+let refreshing = false;
+let availableVersion = "";
+let dismissedVersion = "";
 function notify(message: string) {
   $("#toast").textContent = message;
   $("#toast").classList.add("visible");
@@ -237,11 +248,9 @@ function render() {
   $("#undo").toggleAttribute("disabled", !game.history.length);
   $("#hint").toggleAttribute("disabled", s.status !== "playing");
   $("#remix").toggleAttribute("disabled", s.status === "won");
-  $("#sound").innerHTML = icon(sound ? "sound" : "mute");
-  $("#sound").setAttribute(
-    "aria-label",
-    sound ? "Turn sound off" : "Turn sound on",
-  );
+  $("#sound-icon").innerHTML = icon(sound ? "sound" : "mute");
+  $("#sound-state").textContent = sound ? "On" : "Off";
+  $("#sound").setAttribute("aria-checked", String(sound));
   document.body.classList.toggle("reduced-motion", !motion);
   renderTray();
   scheduleSave();
@@ -251,6 +260,7 @@ function closeModal() {
   lastFocus?.focus();
 }
 function modal(html: string, closable = true) {
+  appMenu.close();
   lastFocus = document.activeElement as HTMLElement;
   $("#modal-content").innerHTML = html;
   $("#modal-close").hidden = !closable;
@@ -367,6 +377,75 @@ $("#sound").onclick = () => {
   render();
   if (sound) tone("match");
 };
+$("#about").onclick = () => {
+  modal(
+    `<div class="about-app"><img class="about-icon" src="${assetUrl("app-192.png")}" alt="Little Worlds app icon"><div class="eyebrow">HAPPY TILE GARDENS</div><h2 id="modal-title">${APP_NAME}</h2><span class="about-version">Version ${APP_VERSION}</span><p class="about-credit">Created by: <strong>Bill Parsons</strong></p><p>Little matches. Big smiles.<br>Free to play, with no ads or purchases.</p><button class="primary-button" id="about-done">Back to the garden ${icon("arrow")}</button></div>`,
+  );
+  $("#about-done").onclick = closeModal;
+};
+
+function shareLink() {
+  modal(
+    `<div class="modal-symbol">${icon("share")}</div><div class="eyebrow">GOOD THINGS ARE BETTER SHARED</div><h2 id="modal-title">Share a little happiness.</h2><p>Send this link to a friend and invite them to the garden.</p><label class="share-link-label" for="share-link">Game link</label><input class="share-link" id="share-link" type="url" value="${SHARE_URL}" readonly><button class="primary-button" id="copy-link">Copy game link ${icon("share")}</button><button class="text-button" id="share-done">Back to the game</button>`,
+  );
+  $("#copy-link").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(SHARE_URL);
+      notify("Game link copied. Share a little happiness!");
+      closeModal();
+    } catch {
+      const field = $<HTMLInputElement>("#share-link");
+      field.focus();
+      field.select();
+      notify("Select and copy the game link to share it.");
+    }
+  };
+  $("#share-done").onclick = closeModal;
+}
+$("#share").onclick = async () => {
+  if (!navigator.share) {
+    shareLink();
+    return;
+  }
+  try {
+    await navigator.share({
+      title: `${APP_NAME} — Happy Tile Gardens`,
+      text: "A happy little tile adventure. Free, with no ads or purchases!",
+      url: SHARE_URL,
+    });
+  } catch (error) {
+    if ((error as { name?: string } | null)?.name !== "AbortError") shareLink();
+  }
+};
+
+async function refreshApp() {
+  if (refreshing) return;
+  refreshing = true;
+  $("#refresh").toggleAttribute("disabled", true);
+  $("#update-refresh").toggleAttribute("disabled", true);
+  $("#refresh span").textContent = "Refreshing…";
+  $("#update-refresh").textContent = "Refreshing…";
+  notify("Refreshing your little world…");
+  try {
+    await updates.refresh();
+  } catch {
+    notify(
+      "The update could not finish downloading. Please try Refresh again.",
+    );
+  } finally {
+    refreshing = false;
+    $("#refresh").toggleAttribute("disabled", false);
+    $("#update-refresh").toggleAttribute("disabled", false);
+    $("#refresh span").textContent = "Refresh";
+    $("#update-refresh").textContent = "Refresh now";
+  }
+}
+$("#refresh").onclick = refreshApp;
+$("#update-refresh").onclick = refreshApp;
+$("#update-later").onclick = () => {
+  dismissedVersion = availableVersion;
+  $("#update-notice").hidden = true;
+};
 $("#help").onclick = () => {
   modal(
     `<div class="modal-symbol">${icon("spark")}</div><div class="eyebrow">YOUR LITTLE ESCAPE</div><h2 id="modal-title">Three is a beautiful number.</h2><div class="help-triple">${portrait(0) + portrait(0) + portrait(0)}</div><ol class="help-steps"><li><b>Pick an uncovered tile.</b><span>Raised edges show the layers. A small number counts the tiles in a directly aligned stack, including the top tile. Clear the top to reach the tiles underneath.</span></li><li><b>Make a match of three.</b><span>Three of the same symbol clear from your tray, making room for more.</span></li><li><b>Clear the whole garden.</b><span>Plan around seven tray spaces. Every level has a winning path.</span></li></ol><p class="help-extra">Tap or click an uncovered tile to pick it. Undo, hints, and remix are always free.</p><label class="motion-setting"><input type="checkbox" id="motion-setting" ${motion ? "checked" : ""}> Enable animations</label><button class="primary-button" id="help-done">Let’s play ${icon("arrow")}</button>`,
@@ -431,3 +510,18 @@ document.addEventListener("visibilitychange", () => {
 recordWin();
 render();
 if (game.state.status !== "playing") resultModal();
+const updates = setupUpdates({
+  beforeReload: () => {
+    if (savePending) persist();
+  },
+  onAvailable: (version) => {
+    availableVersion = version;
+    $("#app-version").classList.add("has-update");
+    $("#app-version").title =
+      `Version ${APP_VERSION} · ${version} is available`;
+    if (version === dismissedVersion) return;
+    $("#update-message").textContent =
+      `Version ${version} is ready. Refresh to update. Your progress stays saved.`;
+    $("#update-notice").hidden = false;
+  },
+});

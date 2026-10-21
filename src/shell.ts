@@ -1,4 +1,5 @@
 import { assetUrl, baseUrl } from "./paths";
+import { APP_VERSION } from "./app-meta";
 
 export function shell(icon: (name: string, cls?: string) => string) {
   return `
@@ -6,7 +7,20 @@ export function shell(icon: (name: string, cls?: string) => string) {
   <header class="app-header">
     <a class="brand" href="${baseUrl}" aria-label="Little Worlds home"><img src="${assetUrl("art/cartoon/brand.webp")}" alt=""><span>little<span class="brand-heavy">worlds</span><small>A HAPPY LITTLE TILE ADVENTURE</small></span></a>
     <div class="header-mode"><span class="live-dot"></span> MATCH · RELAX · SMILE</div>
-    <nav class="header-actions" aria-label="Game settings"><span class="free-label">Free forever ${icon("check")}</span><button class="icon-btn" id="sound" aria-label="Turn sound off">${icon("sound")}</button><button class="icon-btn" id="help" aria-label="How to play">${icon("help")}</button><button class="icon-btn" id="install" aria-label="Install Little Worlds">${icon("download")}</button></nav>
+    <nav class="header-actions" aria-label="App menu">
+      <span class="free-label">Free forever ${icon("check")}</span>
+      <span class="app-version" id="app-version" aria-label="Version ${APP_VERSION}" title="Version ${APP_VERSION}">${APP_VERSION}</span>
+      <button class="icon-btn menu-toggle" id="menu-toggle" aria-label="Open menu" aria-haspopup="menu" aria-expanded="false" aria-controls="app-menu">${icon("menu")}</button>
+      <div class="app-menu" id="app-menu" role="menu" aria-label="App actions" hidden>
+        <button class="menu-item" id="refresh" role="menuitem" tabindex="-1">${icon("reset")}<span>Refresh</span></button>
+        <button class="menu-item" id="share" role="menuitem" tabindex="-1">${icon("share")}<span>Share</span></button>
+        <button class="menu-item" id="about" role="menuitem" tabindex="-1">${icon("about")}<span>About</span></button>
+        <div class="menu-divider" role="separator"></div>
+        <button class="menu-item" id="sound" role="menuitemcheckbox" aria-checked="true" tabindex="-1"><span class="menu-icon" id="sound-icon">${icon("sound")}</span><span>Sound</span><span class="menu-state" id="sound-state">On</span></button>
+        <button class="menu-item" id="help" role="menuitem" tabindex="-1">${icon("help")}<span>How to play</span></button>
+        <button class="menu-item" id="install" role="menuitem" tabindex="-1">${icon("download")}<span>Install</span></button>
+      </div>
+    </nav>
   </header>
   <main class="game-layout">
     <section class="game-card" aria-label="Tile matching game">
@@ -28,6 +42,12 @@ export function shell(icon: (name: string, cls?: string) => string) {
   </main>
   <footer class="page-footer"><span>Little matches. Big smiles.</span><span>A happy little escape ${icon("spark")}</span></footer>
 </div>
+<aside class="update-notice" id="update-notice" aria-labelledby="update-heading" hidden>
+  <span class="update-icon">${icon("download")}</span>
+  <div class="update-copy" role="status"><strong id="update-heading">A fresh little update!</strong><span id="update-message">A newer version is ready. Refresh to update. Your progress stays saved.</span></div>
+  <button class="update-refresh" id="update-refresh">Refresh now</button>
+  <button class="update-later" id="update-later" aria-label="Remind me next time">Later</button>
+</aside>
 <div class="toast" id="toast" role="status"></div>
 <div class="modal-backdrop hidden" id="modal"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close icon-btn" id="modal-close" aria-label="Close dialog">${icon("close")}</button><div id="modal-content"></div></section></div>
 `;
