@@ -1,0 +1,24 @@
+{
+  "name": "tiletopia-inspired",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "node --experimental-strip-types --test tests/game.test.ts",
+    "assets": "node prepare-assets.mjs",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 43871 --strictPort"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "prettier": "^3.9.10",
+    "sharp": "^0.35.5",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vite-plugin-pwa": "^2.0.0"
+  },
+  "dependencies": {
+    "@fontsource/outfit": "^5.3.0"
+  }
+}
