@@ -69,7 +69,7 @@ export default defineConfig({
         skipWaiting: false,
         clientsClaim: false,
         globPatterns: [
-          "**/*.{js,css,html,webp,woff2}",
+          "**/*.{js,css,html,webp,woff2,mp3}",
           "app-*.png",
           "apple-touch-icon.png",
         ],
@@ -81,7 +81,7 @@ export default defineConfig({
             handler: "NetworkOnly",
           },
         ],
-        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
   ],

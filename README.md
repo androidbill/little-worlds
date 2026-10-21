@@ -12,7 +12,7 @@ The included GitHub Actions workflow publishes changes pushed to `main`. Pages m
 
 ## App menu, versions, and updates
 
-The top-right hamburger contains Refresh, Share, About, Sound, How to play, and Install. The version is always visible beside it. About shows the app icon, name, version, and **Created by: Bill Parsons**. Share opens the device share sheet where supported; other browsers offer the public game link to copy. Refresh saves pending progress before reloading and waits for an available offline update to finish downloading.
+The top-right hamburger contains Refresh, Share, About, Music & Sound, How to play, and Install. The version is always visible beside it. About shows the app icon, name, version, and **Created by: Bill Parsons**. Share opens the device share sheet where supported; other browsers offer the public game link to copy. Refresh saves pending progress before reloading and waits for an available offline update to finish downloading.
 
 `release.json` is the single version source. Releases use `YYYY.MM.DD.NN`, starting at `2026.10.20.03`. After finishing app edits, run `npm run release` and commit the updated metadata before the final build. The script fingerprints app inputs; changed inputs increment the revision and set the current date in **America/Edmonton**, while unchanged builds keep their version. The revision continues increasing across day changes. GitHub Actions performs this step automatically and commits missing version metadata before deployment.
 
@@ -47,7 +47,27 @@ Open http://127.0.0.1:43871. Visit once online to download the game and artwork;
 - Help is unlimited and free. Completion earns three stars without a remix, two with 1–3 remixes, and one with 4 or more. Hints and undo do not cost stars.
 - Progress, current board, tray, undo history, unlocks, best scores, sound, and motion preferences save on this browser and device. Clearing site data deletes local progress. There is no cloud sync.
 
-Tap or click an uncovered tile to pick it. The flat board fits the available screen and shows covered tiles in a darker shade. Keyboard users can Tab through available tiles and press Enter/Space to pick; Ctrl/Cmd+Z undoes. Sound uses original synthesized tones and can be muted. Reduced motion is respected and can be changed in Help.
+Tap or click an uncovered tile to pick it. The flat board fits the available screen and shows covered tiles in a darker shade. Keyboard users can Tab through available tiles and press Enter/Space to pick; Ctrl/Cmd+Z undoes. Reduced motion is respected and can be changed in Help.
+
+## Original soundtrack
+
+On the first launch of the music release, a welcome chooser offers three original instrumental tracks with tap-to-listen previews:
+
+- **Sunny Orchard** — 2:34 of bright marimba, plucked strings, and light percussion.
+- **Berry Bounce** — 2:17 of bubbly synths, bass, and playful electronic beats.
+- **Moonlit Garden** — 2:17 of gentle piano-like keys, soft pads, and sparkling bells.
+
+Choose a track and tap **Let’s play**, or choose **Play without music**. **Menu → Music & Sound** always offers the same tracks, Music off, a music volume slider, and a separate tile-sound switch. The welcome decision, selected track, and volume save in `little-worlds:music:v1`, independently of existing version 3 game progress. Current players see the chooser once after updating. Later launches resume the saved selection after the first tap or key press, respecting browser autoplay rules.
+
+The soundtrack uses original notes, arrangements, and synthesized instruments; there are no external samples, vocals, subscriptions, or music-service requests. Each piece has multiple sections and a seamless looping arrangement. Songs switch with a gentle crossfade; only the selected song is decoded into memory. Audio shares one Web Audio context with tile effects, suspends while the page is hidden, and resumes when players return. A failed download offers a tap-to-retry message without blocking gameplay.
+
+All three MP3s are included in the offline precache (about 6.5 MiB combined). Visit online and allow the game to finish downloading before going offline. They are served from the same GitHub Pages site. Reproduce the soundtrack using Python with NumPy and ffmpeg:
+
+```sh
+python scripts/compose-music.py --scratch /path/to/temporary/masters
+```
+
+The script writes temporary WAV masters to the chosen scratch directory and optimized music to `public/music/`. See `assets/MUSIC.md` for composition details.
 
 Picks register on pointer contact. The board, tray, matches, and score update synchronously; decorative flights never block the next pick or undo. Progress writes are batched after a short pause in tapping and flushed when the page is hidden or left. Actual layers have a small diagonal offset and contrasting rims/shadows. A purple stack badge counts directly aligned remaining tiles, including the visible top tile; it updates as tiles are removed or restored.
 

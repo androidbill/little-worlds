@@ -16,7 +16,7 @@ export function shell(icon: (name: string, cls?: string) => string) {
         <button class="menu-item" id="share" role="menuitem" tabindex="-1">${icon("share")}<span>Share</span></button>
         <button class="menu-item" id="about" role="menuitem" tabindex="-1">${icon("about")}<span>About</span></button>
         <div class="menu-divider" role="separator"></div>
-        <button class="menu-item" id="sound" role="menuitemcheckbox" aria-checked="true" tabindex="-1"><span class="menu-icon" id="sound-icon">${icon("sound")}</span><span>Sound</span><span class="menu-state" id="sound-state">On</span></button>
+        <button class="menu-item" id="sound" role="menuitem" tabindex="-1">${icon("music")}<span>Music & Sound</span></button>
         <button class="menu-item" id="help" role="menuitem" tabindex="-1">${icon("help")}<span>How to play</span></button>
         <button class="menu-item" id="install" role="menuitem" tabindex="-1">${icon("download")}<span>Install</span></button>
       </div>

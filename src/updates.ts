@@ -36,7 +36,7 @@ function waitForActivation(worker: ServiceWorker): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(
       () => finish(new Error("Update download timed out")),
-      12000,
+      45000,
     );
     function finish(error?: Error) {
       clearTimeout(timer);
@@ -131,7 +131,7 @@ export function setupUpdates(options: {
     options.beforeReload();
     if (navigator.onLine) {
       try {
-        await deadline(prepareLatest(), 12000);
+        await deadline(prepareLatest(), 45000);
       } catch {
         if (latestVersion)
           throw new Error(

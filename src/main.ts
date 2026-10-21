@@ -9,6 +9,8 @@ import { assetUrl } from "./paths";
 import { APP_NAME, APP_VERSION, SHARE_URL } from "./app-meta";
 import { setupMenu } from "./menu";
 import { setupUpdates } from "./updates";
+import { Music, TRACKS } from "./music";
+import type { TrackId } from "./music";
 import {
   Game,
   createState,
@@ -40,6 +42,9 @@ const paths: Record<string, string> = {
   download: "M12 3v12m-5-5 5 5 5-5 M4 16v5h16v-5",
   star: "m12 2 3 6.1 6.7 1-4.9 4.8 1.2 6.7-6-3.2-6 3.2 1.2-6.7-4.9-4.8 6.7-1Z",
   menu: "M4 6h16 M4 12h16 M4 18h16",
+  music:
+    "M9 18V5l12-2v13 M9 8l12-2 M9 18a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z M21 16a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z",
+  play: "m9 5 11 7-11 7Z",
   about: "M12 11v6m0-10h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   share:
     "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M8.6 10.5l6.8-4 M8.6 13.5l6.8 4",
@@ -100,7 +105,6 @@ let board: Board,
   saveTimer = 0,
   savePending = false,
   toastTimer = 0,
-  audio: AudioContext | undefined,
   installPrompt: any,
   lastFocus: HTMLElement | null = null;
 
@@ -108,6 +112,7 @@ document.querySelector("#app")!.innerHTML = shell(icon);
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 const appMenu = setupMenu();
+const music = new Music();
 let refreshing = false;
 let availableVersion = "";
 let dismissedVersion = "";
@@ -155,8 +160,8 @@ function scheduleSave() {
 function tone(kind: "pick" | "match" | "win" | "tap", tile = 0) {
   if (!sound) return;
   try {
-    audio ??= new AudioContext();
-    void audio.resume();
+    const audio = music.getContext();
+    if (audio.state !== "running") void audio.resume().catch(() => {});
     const frequencies =
       kind === "win"
         ? [523.25, 659.25, 783.99, 1046.5]
@@ -248,9 +253,6 @@ function render() {
   $("#undo").toggleAttribute("disabled", !game.history.length);
   $("#hint").toggleAttribute("disabled", s.status !== "playing");
   $("#remix").toggleAttribute("disabled", s.status === "won");
-  $("#sound-icon").innerHTML = icon(sound ? "sound" : "mute");
-  $("#sound-state").textContent = sound ? "On" : "Off";
-  $("#sound").setAttribute("aria-checked", String(sound));
   document.body.classList.toggle("reduced-motion", !motion);
   renderTray();
   scheduleSave();
@@ -261,6 +263,7 @@ function closeModal() {
 }
 function modal(html: string, closable = true) {
   appMenu.close();
+  $(".modal-card").classList.remove("music-modal");
   lastFocus = document.activeElement as HTMLElement;
   $("#modal-content").innerHTML = html;
   $("#modal-close").hidden = !closable;
@@ -372,11 +375,89 @@ $("#restart").onclick = () => {
 };
 $("#levels").onclick = showLevels;
 $("#explore").onclick = showLevels;
-$("#sound").onclick = () => {
-  sound = !sound;
-  render();
-  if (sound) tone("match");
-};
+function updateMusicUI() {
+  const status = music.status;
+  document
+    .querySelectorAll<HTMLButtonElement>("[data-track]")
+    .forEach((button) => {
+      const selected = button.dataset.track === music.track;
+      button.setAttribute("aria-pressed", String(selected));
+      button.classList.toggle("is-playing", selected && status === "playing");
+      button.querySelector(".track-play")!.innerHTML = selected
+        ? status === "playing"
+          ? '<span class="music-bars"><i></i><i></i><i></i></span>'
+          : icon("check")
+        : icon("play");
+    });
+  const off = document.querySelector("#music-off");
+  off?.setAttribute("aria-pressed", String(!music.track));
+  const welcome = document.querySelector<HTMLButtonElement>("#music-begin");
+  if (welcome) welcome.disabled = !music.track;
+  const volume = document.querySelector<HTMLInputElement>("#music-volume");
+  if (volume) {
+    volume.value = String(Math.round(music.volume * 100));
+    volume.style.setProperty("--volume", `${music.volume * 100}%`);
+    $("#music-volume-value").textContent = `${Math.round(music.volume * 100)}%`;
+  }
+  const message = document.querySelector("#music-status");
+  if (message) {
+    const name = TRACKS.find((t) => t.id === music.track)?.name;
+    message.textContent =
+      status === "loading"
+        ? `Getting ${name} ready…`
+        : status === "error"
+          ? "Couldn’t load this track. Tap it to retry when connected."
+          : status === "playing"
+            ? music.volume === 0
+              ? `${name} · volume muted`
+              : `Now playing · ${name}`
+            : status === "paused" || status === "ready"
+              ? `${name} · tap a track to play`
+              : "Your garden, your soundtrack. Pick a track to listen.";
+  }
+}
+music.subscribe(updateMusicUI);
+
+function showMusic(firstLaunch = false) {
+  modal(
+    `<div class="music-heading"><span class="music-emblem">${icon("music")}</span><div class="eyebrow">${firstLaunch ? "WELCOME TO LITTLE WORLDS" : "MAKE YOURSELF AT HOME"}</div><h2 id="modal-title">${firstLaunch ? "Pick your happy place." : "Music & Sound"}</h2><p>${firstLaunch ? "Three original soundtracks.<br>Tap one to find your garden’s groove." : "A little bounce, a little bliss.<br>Change your soundtrack whenever you like."}</p></div>
+    <div class="track-list" aria-label="Choose a soundtrack">${TRACKS.map((track, i) => `<button class="track-option track-${i}" data-track="${track.id}" aria-pressed="false"><span class="track-art"><img src="${assetUrl(`art/cartoon/tiles/${track.art}.webp`)}" alt=""></span><span class="track-copy"><strong>${track.name}</strong><span>${track.mood}</span><small>${track.detail}</small></span><span class="track-play">${icon("play")}</span></button>`).join("")}</div>
+    <p class="music-status" id="music-status" role="status" aria-live="polite"></p>
+    <div class="audio-controls"><div class="volume-heading"><label for="music-volume">${icon("sound")} Music volume</label><output id="music-volume-value" for="music-volume">45%</output></div><input class="music-volume" id="music-volume" type="range" min="0" max="100" step="1" value="45"><label class="effects-setting" for="effects-setting"><span><strong>Tile sounds</strong><small>Happy little taps & matches</small></span><input id="effects-setting" type="checkbox" role="switch" ${sound ? "checked" : ""}><span class="audio-switch" aria-hidden="true"></span></label></div>
+    ${firstLaunch ? `<button class="primary-button music-done" id="music-begin" disabled>Let’s play ${icon("arrow")}</button><button class="text-button" id="music-skip">Play without music</button><p class="music-footnote">Change your choice anytime in the menu.</p>` : `<button class="music-off" id="music-off" aria-pressed="false">${icon("mute")} Music off <span>${icon("check")}</span></button><button class="primary-button music-done" id="music-done">Back to the garden ${icon("arrow")}</button><p class="music-footnote">Original music. Free forever. Yours to enjoy offline.</p>`}`,
+    !firstLaunch,
+  );
+  $(".modal-card").classList.add("music-modal");
+  document
+    .querySelectorAll<HTMLButtonElement>("[data-track]")
+    .forEach((button) => {
+      button.onclick = () => music.select(button.dataset.track as TrackId);
+    });
+  $("#music-volume").oninput = (e) =>
+    music.setVolume(Number((e.target as HTMLInputElement).value) / 100);
+  $("#effects-setting").onchange = (e) => {
+    sound = (e.target as HTMLInputElement).checked;
+    scheduleSave();
+    if (sound) tone("match");
+  };
+  if (firstLaunch) {
+    const begin = () => {
+      music.finishWelcome();
+      closeModal();
+      if (game.state.status !== "playing") resultModal();
+    };
+    $("#music-begin").onclick = begin;
+    $("#music-skip").onclick = () => {
+      music.select(null);
+      begin();
+    };
+  } else {
+    $("#music-off").onclick = () => music.select(null);
+    $("#music-done").onclick = closeModal;
+  }
+  updateMusicUI();
+}
+$("#sound").onclick = () => showMusic();
 $("#about").onclick = () => {
   modal(
     `<div class="about-app"><img class="about-icon" src="${assetUrl("app-192.png")}" alt="Little Worlds app icon"><div class="eyebrow">HAPPY TILE GARDENS</div><h2 id="modal-title">${APP_NAME}</h2><span class="about-version">Version ${APP_VERSION}</span><p class="about-credit">Created by: <strong>Bill Parsons</strong></p><p>Little matches. Big smiles.<br>Free to play, with no ads or purchases.</p><button class="primary-button" id="about-done">Back to the garden ${icon("arrow")}</button></div>`,
@@ -509,7 +590,8 @@ document.addEventListener("visibilitychange", () => {
 });
 recordWin();
 render();
-if (game.state.status !== "playing") resultModal();
+if (!music.welcomed) showMusic(true);
+else if (game.state.status !== "playing") resultModal();
 const updates = setupUpdates({
   beforeReload: () => {
     if (savePending) persist();
